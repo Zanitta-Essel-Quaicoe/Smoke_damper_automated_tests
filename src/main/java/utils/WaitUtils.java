@@ -5,6 +5,7 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
+import java.util.List;
 
 public class WaitUtils {
 
@@ -40,6 +41,12 @@ public class WaitUtils {
     public WebElement waitForPresence(By locator) {
         return wait.until(ExpectedConditions.presenceOfElementLocated(locator));
     }
+
+    public List<WebElement> waitForVisibleElements(By locator) {
+        WebDriverWait w = new WebDriverWait(driver, Duration.ofSeconds(15));
+        return w.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(locator));
+    }
+
 
     // ------------------------------
     // General Helpers
