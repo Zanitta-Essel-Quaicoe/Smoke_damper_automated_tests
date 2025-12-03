@@ -67,4 +67,19 @@ public class WaitUtils {
         wait.until(ExpectedConditions.urlContains(fragment));
     }
 
+    // ------------------------------
+    // Strong Wait for Entire Sections
+    // ------------------------------
+    public void waitForSectionToRender(By locator) {
+        try {
+            WebDriverWait strongWait = new WebDriverWait(driver, Duration.ofSeconds(25));
+            strongWait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+            waitForSeconds(1); // small buffer for Angular rendering
+        } catch (Exception e) {
+            System.out.println(" Section did not render for locator: " + locator);
+            throw e;
+        }
+    }
+
+
 }

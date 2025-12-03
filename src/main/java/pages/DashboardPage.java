@@ -19,8 +19,8 @@ public class DashboardPage extends BaseTest {
     private UIHelpers ui;
 
     // === Locators ===
-    private By viewAllModulesButton = By.xpath("//app-button[contains(@text,'View all')]");
-    private By viewAllEventsButton = By.xpath("(//app-button[contains(@text,'View all')])[2]");
+    private By viewAllModulesButton = By.xpath("//div[contains(@class,'sample_modules')]//app-button//span[contains(text(),'View all')]");
+    private By viewAllEventsButton = By.xpath("//div[contains(@class,'latest_event_logs')]//app-button//span[contains(text(),'View all')]");
     private By viewDeviceListButton = By.xpath("//button[.//span[text()='View device list']]");
     private By dashboardMainHeader = By.xpath("//h1[contains(text(),'Dashboard')]");
     private By totalModulesValue = By.xpath( "//app-dashboard-summary-card[@title='Total modules']//div[@class='data']/div[@class='total']");
@@ -50,11 +50,27 @@ public class DashboardPage extends BaseTest {
     /** Navigate to Module Overview */
     public ModuleOverviewPage clickViewAllModules() {
         try {
-            ui.safeClick(viewAllModulesButton);
-            System.out.println("➡ Navigating to Module Overview page (View all modules)...");
+            System.out.println("➡ Clicking 'View all' under Module Overview...");
+
+            wait.waitForSectionToRender(
+                    By.xpath("//div[contains(@class,'sample_modules')]")
+            );
+
+            WebElement btn = wait.waitForClickable(viewAllModulesButton);
+
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", btn);
+            wait.waitForSeconds(1);
+
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+
+            wait.waitForUrlContains("/module-overview");
+
+            System.out.println("✔ Navigated to Module Overview page (via View all).");
+
             return new ModuleOverviewPage(driver);
+
         } catch (Exception e) {
-            System.out.println(" Failed to click 'View all' (Modules). Element missing or not clickable.");
+            System.out.println(" Failed to click 'View all' for Module Overview: " + e.getMessage());
             throw e;
         }
     }
@@ -88,18 +104,25 @@ public class DashboardPage extends BaseTest {
         try {
             System.out.println("➡ Clicking 'View device list' …");
 
+            wait.waitForSectionToRender(
+                    By.xpath("//div[contains(@class,'summary_card')]//h3[contains(text(),'Total modules')]")
+            );
+
             WebElement btn = wait.waitForClickable(viewDeviceListButton);
+
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", btn);
+            wait.waitForSeconds(1);
 
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
 
             wait.waitForUrlContains("/module-overview");
 
-            System.out.println("✔ Navigation to Module Overview successful.");
+            System.out.println("✔ Navigated to Module Overview page via 'View device list'.");
 
             return new ModuleOverviewPage(driver);
 
         } catch (Exception e) {
-            System.out.println(" Failed to click 'View device list'. " + e.getMessage());
+            System.out.println(" Failed to navigate via 'View device list': " + e.getMessage());
             throw e;
         }
     }

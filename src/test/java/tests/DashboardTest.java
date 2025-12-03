@@ -57,7 +57,7 @@ public class DashboardTest extends BaseTest {
 
         dashboard.clickViewAllModules();
 
-        System.out.println("✔ Navigated to Module Overview page from Dashboard (Grid View).");
+        System.out.println("✔ Navigated to Module Overview page from Dashboard.");
     }
 
     @Test
