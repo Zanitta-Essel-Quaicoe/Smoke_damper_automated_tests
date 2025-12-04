@@ -16,12 +16,28 @@ public class ModuleOverviewPage extends BaseTest {
     private WaitUtils wait;
     private UIHelpers ui;
 
+    // -----------------------------
+    // Constructors
+    // -----------------------------
+
+    /** DEFAULT constructor → used by MOST tests */
     public ModuleOverviewPage(WebDriver driver) {
         this.driver = driver;
         this.wait = new WaitUtils(driver);
         this.ui = new UIHelpers(driver);
         verifyPageLoaded();
         ensureListView();
+    }
+
+    /** SPECIAL constructor → allows skipping list-view switching */
+    public ModuleOverviewPage(WebDriver driver, boolean skipEnsureListView) {
+        this.driver = driver;
+        this.wait = new WaitUtils(driver);
+        this.ui = new UIHelpers(driver);
+        verifyPageLoaded();
+        if (!skipEnsureListView) {
+            ensureListView();
+        }
     }
 
     // -----------------------------
@@ -53,12 +69,13 @@ public class ModuleOverviewPage extends BaseTest {
     private By noDataMessage = By.xpath("//app-no-data//p[contains(text(),'No matching modules')]");
     private By resetFilterButton = By.xpath("//button[.//span[text()='Reset']]");
 
-
+    // EXPORT BUTTON
+    private By exportButton = By.xpath("//div[contains(@class,'exports--module_commissioning')]//span[contains(text(),'Export')]");
 
 
 
     // -----------------------------
-    // Verify Page Loaded
+    // Page Load Verification
     // -----------------------------
     private void verifyPageLoaded() {
         try {
@@ -78,7 +95,7 @@ public class ModuleOverviewPage extends BaseTest {
 
 
     // -----------------------------
-    // Ensure LIST VIEW is active
+    // Ensure LIST VIEW
     // -----------------------------
     private void ensureListView() {
         try {
@@ -119,7 +136,6 @@ public class ModuleOverviewPage extends BaseTest {
 
         wait.waitForSeconds(1);
     }
-
 
 
     // ------------------------------------------------
@@ -313,8 +329,27 @@ public class ModuleOverviewPage extends BaseTest {
         return totalAfterReset > 0;
     }
 
+    // Click Export
+    public void clickExport() {
+        try {
+            System.out.println("➡ Clicking Export on Module Overview...");
 
+            wait.waitForSectionToRender(By.xpath("//div[contains(@class,'exports--module_commissioning')]"));
 
+            WebElement btn = wait.waitForClickable(exportButton);
+
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", btn);
+            wait.waitForSeconds(1);
+
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+
+            System.out.println("✔ Export triggered.");
+
+        } catch (Exception e) {
+            System.out.println(" Failed to click Export: " + e.getMessage());
+            throw e;
+        }
+    }
 
 
 }

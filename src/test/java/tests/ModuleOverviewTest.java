@@ -2,9 +2,7 @@ package tests;
 
 import base.BaseTest;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import pages.DashboardPage;
 import pages.ModuleOverviewPage;
 import pages.SidebarPage;
 
