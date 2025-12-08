@@ -63,7 +63,15 @@ public class ModuleOverviewPage extends BaseTest {
     // Overlay items
     private By filterOptionsOverlay = By.cssSelector(".cdk-overlay-pane app-action-items-overlay ul li button");
 
+    // MODULE IP column
+    private By moduleIpCells = By.cssSelector("td.mat-column-module_id");
+
+    //Network Status column
+    private By networkStatusCells = By.cssSelector("td.mat-column-network_status app-module-status-indicator");
+
     // I/O Status column
+    private By ioStatusColumn = By.cssSelector("td.mat-column-io_status app-module-status-indicator");
+
     private By ioStatusCells = By.cssSelector("app-module-manager-list-view table tbody tr td:nth-child(5)");
 
     private By noDataMessage = By.xpath("//app-no-data//p[contains(text(),'No matching modules')]");
@@ -350,6 +358,235 @@ public class ModuleOverviewPage extends BaseTest {
             throw e;
         }
     }
+
+    // -----------------------------
+    // Module IP Verification
+    // -----------------------------
+    public List<String> getAllModuleIPs() {
+
+        ensureListView();
+        setRowsPerPageTo100();
+        wait.waitForSeconds(1);
+
+        waitForTableToLoad();
+
+        List<String> ipList = new java.util.ArrayList<>();
+
+        int page = 1;
+
+        while (true) {
+            System.out.println("➡ Collecting Module IPs from page " + page);
+
+            waitForTableToLoad();
+
+            List<WebElement> cells = driver.findElements(moduleIpCells);
+
+            for (WebElement cell : cells) {
+                String ip = cell.getText().trim();
+                ipList.add(ip);
+            }
+
+            if (!hasNextPage()) break;
+
+            goToNextPage();
+            page++;
+        }
+
+        System.out.println("✔ TOTAL collected Module IP values = " + ipList.size());
+        return ipList;
+    }
+
+    public boolean validateModuleIPs() {
+
+        List<String> ips = getAllModuleIPs();
+
+        java.util.Set<String> uniqueCheck = new java.util.HashSet<>();
+
+        for (String ip : ips) {
+
+            // 1. Check for "unknown"
+            if (ip.equalsIgnoreCase("unknown") || ip.isBlank()) {
+                System.out.println(" Invalid Module IP found: '" + ip + "'");
+                return false;
+            }
+
+            // 2. Validate numeric format
+            if (!ip.matches("\\d+")) {
+                System.out.println(" Non-numeric Module IP found: " + ip);
+                return false;
+            }
+
+            // 3. Validate 4-digit pattern
+            if (ip.length() != 4) {
+                System.out.println(" Module IP not 4 digits: " + ip);
+                return false;
+            }
+
+            // 4. Check for duplicates
+            if (!uniqueCheck.add(ip)) {
+                System.out.println(" Duplicate Module IP detected: " + ip);
+                return false;
+            }
+        }
+
+        System.out.println("✔ All Module IPs are valid, unique, and correctly formatted.");
+        return true;
+    }
+
+    // -----------------------------
+    // Network Status Verification
+    // -----------------------------
+    public boolean validateNetworkStatus() {
+
+        System.out.println("\n=== VALIDATING NETWORK STATUS COLUMN ===");
+
+        ensureListView();
+        setRowsPerPageTo100();
+        waitForTableToLoad();
+
+        int page = 1;
+
+        while (true) {
+            System.out.println("➡ Validating page " + page);
+
+            List<WebElement> indicators = driver.findElements(networkStatusCells);
+
+            if (indicators.isEmpty()) {
+                System.out.println("⚠ No network status indicators found on page " + page);
+                return false;
+            }
+
+            for (WebElement indicator : indicators) {
+
+                String text = indicator.getText().trim().toLowerCase();
+
+                String iconSrc = "";
+                try {
+                    WebElement img = indicator.findElement(By.tagName("img"));
+                    iconSrc = img.getAttribute("src");
+                } catch (Exception ignored) {}
+
+                // FIX HERE: get class from the INNER DIV
+                String classes = "";
+                try {
+                    WebElement statusDiv = indicator.findElement(By.cssSelector("div.module_status_indicator"));
+                    classes = statusDiv.getAttribute("class");
+                } catch (Exception e) {
+                    System.out.println(" Could not extract internal status div class.");
+                    return false;
+                }
+
+                System.out.println(" → Found status: " + text + " | classes: " + classes + " | icon: " + iconSrc);
+
+                switch (text) {
+                    case "online":
+                        if (!classes.contains("healthy")) return false;
+                        if (!iconSrc.contains("online")) return false;
+                        break;
+
+                    case "offline":
+                        if (!classes.contains("faulty")) return false;
+                        if (!iconSrc.contains("offline")) return false;
+                        break;
+
+                    case "pending":
+                        if (!classes.contains("pending")) return false;
+                        if (!iconSrc.contains("pending")) return false;
+                        break;
+
+                    default:
+                        System.out.println(" INVALID NETWORK STATUS FOUND: " + text);
+                        return false;
+                }
+            }
+
+            if (!hasNextPage()) break;
+
+            goToNextPage();
+            page++;
+        }
+
+        System.out.println("✔ All Network Status values validated successfully.");
+        return true;
+    }
+
+    // -----------------------------
+    // Network Status Verification
+    // -----------------------------
+    public boolean validateIOStatusAcrossPages() {
+
+        System.out.println("\n=== VALIDATING I/O STATUS COLUMN ===");
+
+        ensureListView();
+        setRowsPerPageTo100();
+        waitForTableToLoad();
+
+        int page = 1;
+
+        while (true) {
+            System.out.println("➡ Validating page " + page);
+
+            List<WebElement> indicators = driver.findElements(ioStatusColumn);
+
+            for (WebElement indicator : indicators) {
+
+                // TEXT (Healthy / Pending / Faulty)
+                String text = indicator.getText().trim().toLowerCase();
+
+                // ICON
+                String iconSrc = "";
+                try {
+                    WebElement img = indicator.findElement(By.tagName("img"));
+                    iconSrc = img.getAttribute("src");
+                } catch (Exception ignored) {}
+
+                // INNER DIV CLASS
+                String classes = "";
+                try {
+                    WebElement statusDiv =
+                            indicator.findElement(By.cssSelector("div.module_status_indicator"));
+                    classes = statusDiv.getAttribute("class");
+                } catch (Exception e) {
+                    System.out.println(" Could not extract I/O status class.");
+                    return false;
+                }
+
+                System.out.println(" → Found I/O status: " + text +
+                        " | classes: " + classes +
+                        " | icon: " + iconSrc);
+
+                switch (text) {
+                    case "healthy":
+                        if (!classes.contains("healthy")) return false;
+                        if (!iconSrc.contains("healthy")) return false;
+                        break;
+
+                    case "pending":
+                        if (!classes.contains("pending")) return false;
+                        if (!iconSrc.contains("pending")) return false;
+                        break;
+
+                    case "faulty":
+                        if (!classes.contains("faulty")) return false;
+                        if (!iconSrc.contains("faulty")) return false;
+                        break;
+
+                    default:
+                        System.out.println(" INVALID I/O STATUS FOUND: " + text);
+                        return false;
+                }
+            }
+
+            if (!hasNextPage()) break;
+
+            goToNextPage();
+            page++;
+        }
+
+        System.out.println("✔ I/O Status validated across all pages.");
+        return true;
+    }
+
 
 
 }

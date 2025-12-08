@@ -2,7 +2,9 @@ package tests;
 
 import base.BaseTest;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import pages.DashboardPage;
 import pages.ModuleOverviewPage;
 import pages.SidebarPage;
 
@@ -68,6 +70,53 @@ public class ModuleOverviewTest extends BaseTest {
 
         System.out.println("✔ Reset filter test passed.");
     }
+
+    @Test
+    @DisplayName("Validate that all Module IPs are correct, non-unknown, and unique")
+    public void testModuleIPValidity() {
+
+        System.out.println("\n=== TEST: Validate Module IP Assignments ===");
+
+        new DashboardPage(driver);
+
+        SidebarPage sidebar = new SidebarPage(driver);
+        ModuleOverviewPage moduleOverview = sidebar.goToModuleOverview();
+
+        boolean result = moduleOverview.validateModuleIPs();
+
+        Assertions.assertTrue(result, " Module IP validation failed!");
+    }
+
+    @Test
+    @DisplayName("Validate Network Status column (Online / Offline / Pending)")
+    public void testNetworkStatusValidity() {
+
+        System.out.println("\n=== TEST: Validate Network Status Column ===");
+
+        new DashboardPage(driver);
+        SidebarPage sidebar = new SidebarPage(driver);
+
+        ModuleOverviewPage moduleOverview = sidebar.goToModuleOverview();
+
+        boolean result = moduleOverview.validateNetworkStatus();
+
+        Assertions.assertTrue(result, " Network Status validation failed!");
+    }
+
+    @Test
+    @DisplayName("Validate I/O Status column (Healthy, Pending, Faulty)")
+    public void testIOStatusValidity() {
+
+        System.out.println("\n=== TEST: Validate I/O Status Column ===");
+
+        SidebarPage sidebar = new SidebarPage(driver);
+        ModuleOverviewPage moduleOverview = sidebar.goToModuleOverview();
+
+        boolean result = moduleOverview.validateIOStatusAcrossPages();
+
+        Assertions.assertTrue(result, " I/O Status validation failed!");
+    }
+
 
 
 }

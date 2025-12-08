@@ -38,7 +38,7 @@ public class SidebarPage {
         ui.safeClick(moduleOverviewMenu);
         wait.waitForUrlContains("/module-overview");
         System.out.println("➡ Navigated to Module Overview");
-        return new ModuleOverviewPage(driver);
+        return new ModuleOverviewPage(driver, false);
     }
 
     public EventLogsPage goToEventLogs() {
