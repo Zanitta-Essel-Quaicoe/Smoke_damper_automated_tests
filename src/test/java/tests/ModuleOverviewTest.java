@@ -54,22 +54,36 @@ public class ModuleOverviewTest extends BaseTest {
         SidebarPage sidebar = new SidebarPage(driver);
         ModuleOverviewPage modulePage = sidebar.goToModuleOverview();
 
-        // Apply a filter first
         modulePage.applyStatusFilter("Healthy");
         boolean filtered = modulePage.validateStatusAcrossAllPages("Healthy");
 
         Assertions.assertTrue(filtered, " Filter did not apply correctly before reset.");
 
-        // Now reset
         modulePage.resetFilters();
 
-        // Validate reset
         boolean resetOk = modulePage.validateResetShowsAllModules();
 
         Assertions.assertTrue(resetOk, " Reset filter did not restore full module list!");
 
         System.out.println("✔ Reset filter test passed.");
     }
+
+    @Test
+    @DisplayName("Validate Module Name column is not empty and has no duplicates")
+    public void testModuleNameValidity() {
+
+        System.out.println("\n=== TEST: Validate Module Name Column ===");
+
+        DashboardPage dashboard = new DashboardPage(driver);
+        SidebarPage sidebar = new SidebarPage(driver);
+
+        ModuleOverviewPage moduleOverview = sidebar.goToModuleOverview();
+
+        boolean result = moduleOverview.validateModuleNames();
+
+        Assertions.assertTrue(result, " Module Name validation failed!");
+    }
+
 
     @Test
     @DisplayName("Validate that all Module IPs are correct, non-unknown, and unique")
@@ -115,6 +129,54 @@ public class ModuleOverviewTest extends BaseTest {
         boolean result = moduleOverview.validateIOStatusAcrossPages();
 
         Assertions.assertTrue(result, " I/O Status validation failed!");
+    }
+
+    @Test
+    @DisplayName("Validate Last Seen Column Formatting and Values")
+    public void testLastSeenColumnValidity() {
+
+        System.out.println("\n=== TEST: Validate Last Seen Column ===");
+
+        new DashboardPage(driver);
+        SidebarPage sidebar = new SidebarPage(driver);
+
+        ModuleOverviewPage modulePage = sidebar.goToModuleOverview();
+
+        boolean result = modulePage.validateLastSeenValues();
+
+        Assertions.assertTrue(result, " Last Seen column validation failed!");
+    }
+
+    @Test
+    @DisplayName("Validate Last Seen correlates correctly with Network Status")
+    public void testLastSeenVsNetworkStatus() {
+
+        System.out.println("\n=== TEST: Validate Last Seen ↔ Network Status ===");
+
+        new DashboardPage(driver);
+        SidebarPage sidebar = new SidebarPage(driver);
+
+        ModuleOverviewPage modulePage = sidebar.goToModuleOverview();
+
+        boolean result = modulePage.validateLastSeenVsNetworkStatus();
+
+        Assertions.assertTrue(result, " Last Seen ↔ Network Status validation failed!");
+    }
+
+    @Test
+    @DisplayName("Validate Action Dropdown Logic Based on Module State")
+    public void testActionColumnLogic() {
+
+        System.out.println("\n=== TEST: Validate Action Column Logic ===");
+
+        new DashboardPage(driver);
+        SidebarPage sidebar = new SidebarPage(driver);
+
+        ModuleOverviewPage modulePage = sidebar.goToModuleOverview();
+
+        boolean result = modulePage.validateActionColumnLogic();
+
+        Assertions.assertTrue(result, "} Action column logic validation failed!");
     }
 
 
