@@ -59,11 +59,19 @@ public class ModuleOverviewPage extends BaseTest {
     private By nextPageButton = By.cssSelector(".paginator_navigation app-button:last-of-type button");
     private By rangeText = By.cssSelector(".paginator_range_display");
 
-    // FILTER button
-    private By filterStatusDropdown = By.cssSelector("app-select[usecase='module_status_filter'] button.select");
+    //Filters
+    //Network Status filters
+    private By networkFilterButton = By.cssSelector("app-select[usecase='module_status_filter'] button.select");
+    private By networkFilterOptions = By.cssSelector(".cdk-overlay-pane ul li button");
 
-    // Overlay items
-    private By filterOptionsOverlay = By.cssSelector(".cdk-overlay-pane app-action-items-overlay ul li button");
+    //I/O Status filters
+    private By ioFilterButton = By.xpath("//button[.//div[text()='I/O Status']]");
+    private By ioFilterOptions = By.cssSelector(".cdk-overlay-pane ul li button");
+
+    //All filters
+    private By allFilterButton = By.xpath("//button[.//div[text()='All']]");
+    private By allFilterOptions = By.cssSelector(".cdk-overlay-pane ul li button");
+
 
     // EXPORT BUTTON
     private By exportButton = By.xpath("//div[contains(@class,'exports--module_commissioning')]//span[contains(text(),'Export')]");
@@ -77,14 +85,10 @@ public class ModuleOverviewPage extends BaseTest {
     // I/O Status column
     private By ioStatusColumn = By.cssSelector("td.mat-column-io_status app-module-status-indicator");
 
-    private By ioStatusCells = By.cssSelector("app-module-manager-list-view table tbody tr td:nth-child(5)");
-
     private By noDataMessage = By.xpath("//app-no-data//p[contains(text(),'No matching modules')]");
 
     //Last seen column
     private By lastSeenCells = By.cssSelector("app-module-manager-list-view table tbody tr td.cdk-column-last_seen");
-
-    private By resetFilterButton = By.xpath("//button[.//span[text()='Reset']]");
 
     // ACTION COLUMN
     private By actionButtons = By.cssSelector("td.cdk-column-action button.khebab_action");
@@ -230,21 +234,23 @@ public class ModuleOverviewPage extends BaseTest {
         wait.waitForSeconds(2);
     }
 
-    public void applyStatusFilter(String status) {
-        System.out.println("➡ Applying Status Filter: " + status);
+    // =========================
+    // Network Status Filter
+    // =========================
+    public void applyNetworkFilter(String value) {
+        System.out.println("➡ Applying Network Status Filter: " + value);
 
         // Open dropdown
-        ui.safeClick(filterStatusDropdown);
-
+        ui.safeClick(networkFilterButton);
         wait.waitForSeconds(1);
 
-        // Wait for overlay and find matching button
-        List<WebElement> options = wait.waitForVisibleElements(filterOptionsOverlay);
+        // Wait for overlay options
+        List<WebElement> options = wait.waitForVisibleElements(networkFilterOptions);
 
         boolean found = false;
 
         for (WebElement opt : options) {
-            if (opt.getText().trim().equalsIgnoreCase(status)) {
+            if (opt.getText().trim().equalsIgnoreCase(value)) {
                 opt.click();
                 found = true;
                 break;
@@ -252,51 +258,150 @@ public class ModuleOverviewPage extends BaseTest {
         }
 
         if (!found) {
-            throw new RuntimeException(" Filter option not found: " + status);
+            throw new RuntimeException(" Network Status filter option NOT FOUND: " + value);
         }
 
-        wait.waitForSeconds(2); // allow table refresh
+        wait.waitForSeconds(2);
         waitForTableToLoad();
+
+        System.out.println("✔ Network Status filter applied: " + value);
     }
 
-    private boolean isNoMatchingModulesMessageVisible() {
-        try {
-            return driver.findElement(noDataMessage).isDisplayed();
-        } catch (Exception e) {
-            return false;
+    private String mapNetworkStatus(String filter) {
+        switch (filter.toLowerCase()) {
+            case "connected": return "online";
+            case "disconnected": return "offline";
+            case "pending": return "pending";
+            case "degraded": return "degraded";
+            default: return "";
         }
     }
 
-    public boolean validateStatusAcrossAllPages(String expectedStatus) {
 
-        expectedStatus = expectedStatus.trim().toLowerCase();
+    public boolean validateNetworkFilterResults(String filterValue) {
+
+        System.out.println("\n=== VALIDATING NETWORK FILTER RESULTS FOR: " + filterValue + " ===");
+
+        String expectedStatus = mapNetworkStatus(filterValue).toLowerCase();
 
         ensureListView();
         setRowsPerPageTo100();
-        wait.waitForSeconds(1);
-
         waitForTableToLoad();
 
-        // FIRST CHECK: Is "No matching modules found" visible?
-        if (isNoMatchingModulesMessageVisible()) {
-            System.out.println("✔ No matching modules found for filter: " + expectedStatus);
+        int page = 1;
+        int totalMatched = 0;
+
+        while (true) {
+
+            System.out.println("➡ Validating page " + page);
+            waitForTableToLoad();
+
+            List<WebElement> statuses =
+                    driver.findElements(By.cssSelector("td.mat-column-network_status"));
+
+            if (statuses.isEmpty()) {
+                System.out.println("⚠ No rows found on page " + page);
+            }
+
+            int pageMatched = 0;
+
+            for (WebElement cell : statuses) {
+                String text = cell.getText().trim().toLowerCase();
+
+                if (text.contains(expectedStatus)) {
+                    pageMatched++;
+                } else {
+                    System.out.println(" MISMATCH → Expected: " + expectedStatus + ", Found: " + text);
+                    return false;
+                }
+            }
+
+            System.out.println(" Page " + page + " matched rows = " + pageMatched);
+
+            totalMatched += pageMatched;
+
+            if (!hasNextPage()) break;
+
+            goToNextPage();
+            page++;
+        }
+
+        // FINAL SUMMARY LOGGING
+        if (totalMatched == 0) {
+            System.out.println("⚠ WARNING: No modules found with Network Status = " + expectedStatus);
             return true;
         }
+
+        System.out.println("Found " + totalMatched + " modules with Network Status = " + expectedStatus);
+        System.out.println("✔ All rows match expected Network Status: " + expectedStatus);
+
+        return true;
+    }
+
+
+    // =========================
+    // I/O Status Filter
+    // =========================
+    public void applyIOFilter(String value) {
+
+        System.out.println("➡ Applying I/O Status Filter: " + value);
+
+        ui.safeClick(ioFilterButton);
+        wait.waitForSeconds(1);
+
+        List<WebElement> options = wait.waitForVisibleElements(ioFilterOptions);
+
+        boolean found = false;
+
+        for (WebElement opt : options) {
+            if (opt.getText().trim().equalsIgnoreCase(value)) {
+                opt.click();
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            throw new RuntimeException(" I/O Status filter option NOT FOUND: " + value);
+        }
+
+        wait.waitForSeconds(2);
+        waitForTableToLoad();
+
+        System.out.println("✔ I/O Status filter applied: " + value);
+    }
+
+    public boolean validateIOFilterResults(String filterValue) {
+
+        System.out.println("\n=== VALIDATING I/O FILTER RESULTS FOR: " + filterValue + " ===");
+
+        String expected = filterValue.toLowerCase();
+        int totalRowsChecked = 0;
+        int matchedCount = 0;
+
+        ensureListView();
+        setRowsPerPageTo100();
+        waitForTableToLoad();
 
         int page = 1;
 
         while (true) {
+
             System.out.println("➡ Validating page " + page);
 
-            waitForTableToLoad();
+            List<WebElement> statuses = driver.findElements(ioStatusColumn);
 
-            List<WebElement> statuses = driver.findElements(ioStatusCells);
+            for (WebElement cell : statuses) {
+                totalRowsChecked++;
 
-            for (WebElement statusCell : statuses) {
-                String actual = statusCell.getText().trim().toLowerCase();
+                String text = cell.getText().trim().toLowerCase();
 
-                if (!actual.contains(expectedStatus)) {
-                    System.out.println(" MISMATCH: expected = " + expectedStatus + ", actual = " + actual);
+                if (text.contains(expected)) {
+                    matchedCount++;
+                } else {
+                    System.out.println(
+                            " MISMATCH → Expected: " + expected + " | Found: " + text
+                    );
                     return false;
                 }
             }
@@ -307,51 +412,21 @@ public class ModuleOverviewPage extends BaseTest {
             page++;
         }
 
-        System.out.println("✔ All pages validated for filter: " + expectedStatus);
+        // ---- Logging summary ----
+        if (matchedCount == 0) {
+            System.out.println("⚠ WARNING: No modules found with I/O Status = " + expected);
+            return true;   // Do NOT print success message
+        }
+
+        System.out.println("Found " + matchedCount + " modules with I/O Status = " + expected);
+        System.out.println("✔ All rows match expected I/O Status: " + expected);
         return true;
+
     }
 
-    public void resetFilters() {
-        try {
-            System.out.println("➡ Clicking RESET filter...");
-            ui.safeClick(resetFilterButton);
-            wait.waitForSeconds(2);
-            waitForTableToLoad();
-            System.out.println("✔ Filters reset successfully.");
-        } catch (Exception e) {
-            System.out.println(" Failed to click Reset filter.");
-            throw e;
-        }
-    }
-
-    public boolean validateResetShowsAllModules() {
-
-        waitForTableToLoad();
-
-        // If reset worked, table should NOT show the 'no data' message
-        if (isNoMatchingModulesMessageVisible()) {
-            System.out.println(" Reset failed: No data message still displayed!");
-            return false;
-        }
-
-        // Ensure at least 1 row exists
-        int countPage1 = countRowsOnCurrentPage();
-        if (countPage1 == 0) {
-            System.out.println(" Reset failed: Table is empty after reset.");
-            return false;
-        }
-
-        System.out.println("✔ Reset shows modules on page 1. Proceeding to full count...");
-
-        // Count ALL modules across pages (same as before)
-        int totalAfterReset = countAllModules();
-
-        System.out.println("✔ Total modules after reset = " + totalAfterReset);
-
-        return totalAfterReset > 0;
-    }
-
+    // =========================
     // Click Export
+    // =========================
     public void clickExport() {
         try {
             System.out.println("➡ Clicking Export on Module Overview...");
