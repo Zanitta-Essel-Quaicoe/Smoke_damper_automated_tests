@@ -116,6 +116,63 @@ public class ModuleOverviewTest extends BaseTest {
         Assertions.assertTrue(result, " I/O Filter 'Pending' failed!");
     }
 
+    @Test
+    @DisplayName("Filter by Commissioned")
+    public void testFilterCommissioned() {
+
+        SidebarPage sidebar = new SidebarPage(driver);
+        ModuleOverviewPage page = sidebar.goToModuleOverview();
+
+        page.applyAllFilter("Commissioned");
+        boolean result = page.validateAllFilterResults("Commissioned");
+
+        Assertions.assertTrue(result);
+    }
+
+    @Test
+    @DisplayName("Filter by Uncommissioned")
+    public void testFilterUncommissioned() {
+
+        SidebarPage sidebar = new SidebarPage(driver);
+        ModuleOverviewPage page = sidebar.goToModuleOverview();
+
+        page.applyAllFilter("Uncommissioned");
+        boolean result = page.validateAllFilterResults("Uncommissioned");
+
+        Assertions.assertTrue(result);
+    }
+
+    @Test
+    @DisplayName("Filter by All")
+    public void testFilterAll() {
+
+        SidebarPage sidebar = new SidebarPage(driver);
+        ModuleOverviewPage page = sidebar.goToModuleOverview();
+
+        page.applyAllFilter("All");
+        boolean result = page.validateAllFilterResults("All");
+
+        Assertions.assertTrue(result);
+    }
+
+    @Test
+    @DisplayName("Verify Reset Filter clears all applied filters")
+    public void testResetFilters() {
+
+        SidebarPage sidebar = new SidebarPage(driver);
+        ModuleOverviewPage page = sidebar.goToModuleOverview();
+
+        // Apply filters
+        page.applyNetworkFilter("Disconnected");
+        page.applyIOFilter("Faulty");
+        page.applyAllFilter("Uncommissioned");
+
+        // Reset
+        boolean resetOK = page.resetFiltersNew();
+
+        Assertions.assertTrue(resetOK, " Reset did not clear filters properly!");
+    }
+
 
     @Test
     @DisplayName("Validate Module Name column is not empty and has no duplicates")
@@ -151,7 +208,7 @@ public class ModuleOverviewTest extends BaseTest {
     }
 
     @Test
-    @DisplayName("Validate Network Status column (Online / Offline / Pending)")
+    @DisplayName("Validate Network Status column (Online / Degraded / Offline / Pending)")
     public void testNetworkStatusValidity() {
 
         System.out.println("\n=== TEST: Validate Network Status Column ===");

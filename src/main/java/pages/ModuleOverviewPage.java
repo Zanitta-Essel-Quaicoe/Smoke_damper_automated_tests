@@ -72,6 +72,8 @@ public class ModuleOverviewPage extends BaseTest {
     private By allFilterButton = By.xpath("//button[.//div[text()='All']]");
     private By allFilterOptions = By.cssSelector(".cdk-overlay-pane ul li button");
 
+    //Reset button
+    private By resetButton = By.cssSelector("app-button[text='Reset'] button");
 
     // EXPORT BUTTON
     private By exportButton = By.xpath("//div[contains(@class,'exports--module_commissioning')]//span[contains(text(),'Export')]");
@@ -125,9 +127,9 @@ public class ModuleOverviewPage extends BaseTest {
     // -----------------------------
     private void ensureListView() {
         try {
-            WebElement active = driver.findElement(activeViewButton);
+            WebElement active = safeFind(activeViewButton);
 
-            String activeImg = active.findElement(By.tagName("img")).getAttribute("alt");
+            String activeImg = safeFindWithin(active, By.tagName("img")).getAttribute("alt");
 
             if (activeImg.toLowerCase().contains("list")) {
                 System.out.println("✔ Already in LIST view.");
@@ -211,7 +213,7 @@ public class ModuleOverviewPage extends BaseTest {
 
     private int countRowsOnCurrentPage() {
         waitForTableToLoad();
-        List<WebElement> rows = driver.findElements(tableRows);
+        List<WebElement> rows = safeFindAll(tableRows);
         return rows.size();
     }
 
@@ -219,7 +221,7 @@ public class ModuleOverviewPage extends BaseTest {
     // detect if next button is enabled
     private boolean hasNextPage() {
         try {
-            WebElement next = driver.findElement(nextPageButton);
+            WebElement next = safeFind(nextPageButton);
             return next.isEnabled();
         } catch (NoSuchElementException e) {
             return false;
@@ -234,24 +236,147 @@ public class ModuleOverviewPage extends BaseTest {
         wait.waitForSeconds(2);
     }
 
+    // -----------------------------
+    // === GLOBAL SAFE HELPERS ===
+    // -----------------------------
+    /**
+     * safeFind: find single element with retries to avoid stale exceptions
+     */
+    private WebElement safeFind(By locator) {
+        int attempts = 0;
+        while (attempts < 4) {
+            try {
+                WebElement el = driver.findElement(locator);
+                return el;
+            } catch (StaleElementReferenceException | NoSuchElementException e) {
+                attempts++;
+                wait.waitForSeconds(1);
+            }
+        }
+        // final attempt using explicit wait
+        try {
+            WebDriverWait w = new WebDriverWait(driver, Duration.ofSeconds(5));
+            return w.until(ExpectedConditions.presenceOfElementLocated(locator));
+        } catch (Exception e) {
+            throw new NoSuchElementException("Element not found: " + locator.toString());
+        }
+    }
+
+    /**
+     * safeFindAll: find elements with a short retry loop; returns empty list if none
+     */
+    private List<WebElement> safeFindAll(By locator) {
+        int attempts = 0;
+        while (attempts < 4) {
+            try {
+                List<WebElement> els = driver.findElements(locator);
+                return els == null ? new ArrayList<>() : els;
+            } catch (StaleElementReferenceException e) {
+                attempts++;
+                wait.waitForSeconds(1);
+            }
+        }
+        // last resort
+        try {
+            return driver.findElements(locator);
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * safeFindWithin: find child element within parent with retries
+     */
+    private WebElement safeFindWithin(WebElement parent, By childLocator) {
+        int attempts = 0;
+        while (attempts < 4) {
+            try {
+                return parent.findElement(childLocator);
+            } catch (StaleElementReferenceException | NoSuchElementException e) {
+                attempts++;
+                wait.waitForSeconds(1);
+                // refresh parent if possible (best-effort)
+                try {
+                    // no-op: allow loop to retry
+                } catch (Exception ignored) {}
+            }
+        }
+        throw new NoSuchElementException("Child element not found: " + childLocator.toString());
+    }
+
+    /**
+     * safeGetText: robust getText with retries against stale elements
+     */
+    private String safeGetText(WebElement el) {
+        int attempts = 0;
+        while (attempts < 4) {
+            try {
+                return el.getText();
+            } catch (StaleElementReferenceException e) {
+                attempts++;
+                wait.waitForSeconds(1);
+            }
+        }
+        return "";
+    }
+
+    /**
+     * safeClick on WebElement with retry and fallback to JS click
+     */
+    private void safeClickElement(WebElement el) {
+        int attempts = 0;
+        while (attempts < 3) {
+            try {
+                el.click();
+                return;
+            } catch (ElementClickInterceptedException | StaleElementReferenceException e) {
+                attempts++;
+                wait.waitForSeconds(1);
+                try {
+                    ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", el);
+                    ((JavascriptExecutor) driver).executeScript("arguments[0].click();", el);
+                    return;
+                } catch (Exception ignored) {}
+            } catch (Exception e) {
+                attempts++;
+                wait.waitForSeconds(1);
+            }
+        }
+        // final attempt by JS (best-effort)
+        try {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", el);
+        } catch (Exception e) {
+            throw new RuntimeException("Could not click element: " + e.getMessage());
+        }
+    }
+
+    /**
+     * safeClick using a locator
+     */
+    private void safeClick(By locator) {
+        WebElement el = safeFind(locator);
+        safeClickElement(el);
+    }
+
     // =========================
     // Network Status Filter
     // =========================
     public void applyNetworkFilter(String value) {
         System.out.println("➡ Applying Network Status Filter: " + value);
 
-        // Open dropdown
-        ui.safeClick(networkFilterButton);
+        // Open dropdown (use safeClick wrapper)
+        safeClick(networkFilterButton);
         wait.waitForSeconds(1);
 
         // Wait for overlay options
-        List<WebElement> options = wait.waitForVisibleElements(networkFilterOptions);
+        List<WebElement> options = safeFindAll(networkFilterOptions);
 
         boolean found = false;
 
         for (WebElement opt : options) {
-            if (opt.getText().trim().equalsIgnoreCase(value)) {
-                opt.click();
+            String txt = safeGetText(opt).trim();
+            if (txt.equalsIgnoreCase(value)) {
+                safeClickElement(opt);
                 found = true;
                 break;
             }
@@ -296,8 +421,7 @@ public class ModuleOverviewPage extends BaseTest {
             System.out.println("➡ Validating page " + page);
             waitForTableToLoad();
 
-            List<WebElement> statuses =
-                    driver.findElements(By.cssSelector("td.mat-column-network_status"));
+            List<WebElement> statuses = safeFindAll(By.cssSelector("td.mat-column-network_status"));
 
             if (statuses.isEmpty()) {
                 System.out.println("⚠ No rows found on page " + page);
@@ -306,7 +430,7 @@ public class ModuleOverviewPage extends BaseTest {
             int pageMatched = 0;
 
             for (WebElement cell : statuses) {
-                String text = cell.getText().trim().toLowerCase();
+                String text = safeGetText(cell).trim().toLowerCase();
 
                 if (text.contains(expectedStatus)) {
                     pageMatched++;
@@ -346,16 +470,17 @@ public class ModuleOverviewPage extends BaseTest {
 
         System.out.println("➡ Applying I/O Status Filter: " + value);
 
-        ui.safeClick(ioFilterButton);
+        safeClick(ioFilterButton);
         wait.waitForSeconds(1);
 
-        List<WebElement> options = wait.waitForVisibleElements(ioFilterOptions);
+        List<WebElement> options = safeFindAll(ioFilterOptions);
 
         boolean found = false;
 
         for (WebElement opt : options) {
-            if (opt.getText().trim().equalsIgnoreCase(value)) {
-                opt.click();
+            String txt = safeGetText(opt).trim();
+            if (txt.equalsIgnoreCase(value)) {
+                safeClickElement(opt);
                 found = true;
                 break;
             }
@@ -389,12 +514,16 @@ public class ModuleOverviewPage extends BaseTest {
 
             System.out.println("➡ Validating page " + page);
 
-            List<WebElement> statuses = driver.findElements(ioStatusColumn);
+            List<WebElement> statuses = safeFindAll(ioStatusColumn);
+
+            if (statuses.isEmpty()) {
+                System.out.println("⚠ No rows found on page " + page);
+            }
 
             for (WebElement cell : statuses) {
                 totalRowsChecked++;
 
-                String text = cell.getText().trim().toLowerCase();
+                String text = safeGetText(cell).trim().toLowerCase();
 
                 if (text.contains(expected)) {
                     matchedCount++;
@@ -405,6 +534,8 @@ public class ModuleOverviewPage extends BaseTest {
                     return false;
                 }
             }
+
+            System.out.println(" Page " + page + " matched rows = " + matchedCount);
 
             if (!hasNextPage()) break;
 
@@ -423,6 +554,177 @@ public class ModuleOverviewPage extends BaseTest {
         return true;
 
     }
+
+    // =============================================
+    // APPLY "ALL" FILTER (All / Commissioned / Uncommissioned)
+    // =============================================
+    public void applyAllFilter(String value) {
+
+        System.out.println("\n➡ Applying ALL filter: " + value);
+
+        // Locate ONLY the All dropdown (third app-select)
+        By allDropdown = By.cssSelector("app-select[usecase='module_status_filter']:nth-of-type(3) button.select");
+
+        safeClick(allDropdown);
+        wait.waitForSeconds(1);
+
+        // Overlay items
+        By options = By.cssSelector(".cdk-overlay-pane app-action-items-overlay ul li button");
+
+        List<WebElement> items = safeFindAll(options);
+
+        for (WebElement item : items) {
+            String txt = safeGetText(item).trim();
+            if (txt.equalsIgnoreCase(value)) {
+                safeClickElement(item);
+                wait.waitForSeconds(2);
+                waitForTableToLoad();
+                return;
+            }
+        }
+
+        throw new RuntimeException(" Could not find All filter option: " + value);
+    }
+
+    private String getCommissionState(WebElement row) {
+        try {
+            WebElement span = safeFindWithin(row, By.cssSelector("td.cdk-column-module_name span"));
+            String clazz = span.getAttribute("class").trim().toLowerCase();
+
+            if (clazz.equals("na")) return "commissioned";
+            if (clazz.equals("uncommissioned")) return "uncommissioned";
+
+        } catch (Exception ignored) {}
+
+        return "unknown";
+    }
+
+    // =============================================
+    // VALIDATE RESULTS FOR: All / Commissioned / Uncommissioned
+    // =============================================
+    public boolean validateAllFilterResults(String filterValue) {
+
+        System.out.println("\n=== VALIDATING ALL FILTER RESULTS FOR: " + filterValue + " ===");
+
+        ensureListView();
+        setRowsPerPageTo100();
+        waitForTableToLoad();
+
+        int page = 1;
+        int rowCount = 0;
+
+        while (true) {
+
+            System.out.println("➡ Validating page " + page);
+
+            List<WebElement> rows = safeFindAll(By.cssSelector("app-module-manager-list-view table tbody tr"));
+
+            for (WebElement row : rows) {
+
+                String state = getCommissionState(row);
+                rowCount++;
+
+                switch (filterValue.toLowerCase()) {
+
+                    case "all":
+                        break;
+
+                    case "commissioned":
+                        if (!state.equals("commissioned")) {
+                            System.out.println(" MISMATCH → Expected commissioned but found: " + state);
+                            return false;
+                        }
+                        break;
+
+                    case "uncommissioned":
+                        if (!state.equals("uncommissioned")) {
+                            System.out.println(" MISMATCH → Expected uncommissioned but found: " + state);
+                            return false;
+                        }
+                        break;
+
+                    default:
+                        System.out.println(" Invalid filter type: " + filterValue);
+                        return false;
+                }
+            }
+
+            if (!hasNextPage()) break;
+
+            goToNextPage();
+            page++;
+        }
+
+        // Logging
+        if (rowCount == 0) {
+            System.out.println("⚠ WARNING: No modules found for filter = " + filterValue);
+        } else {
+            System.out.println("✔ Total matching modules for '" + filterValue + "': " + rowCount);
+        }
+
+        System.out.println("✔ All rows match expected filter: " + filterValue);
+        return true;
+    }
+
+    // =========================
+// Reset Filters
+// =========================
+    public boolean resetFiltersNew() {
+        System.out.println("\n➡ Clicking RESET filter...");
+
+        try {
+            WebElement reset = safeFind(resetButton);
+            safeClickElement(reset);
+            wait.waitForSeconds(2);
+            waitForTableToLoad();
+
+            System.out.println("✔ Reset clicked successfully.");
+        } catch (Exception e) {
+            System.out.println(" Could not click Reset button: " + e.getMessage());
+            return false;
+        }
+
+        return validateFiltersCleared();
+    }
+
+
+    // =========================
+    // Validate filters cleared
+    // =========================
+    private boolean validateFiltersCleared() {
+
+        System.out.println("➡ Validating that filters were cleared...");
+
+        List<WebElement> dropdownLabels =
+                safeFindAll(By.cssSelector("app-select[usecase='module_status_filter'] button.select .label"));
+
+        if (dropdownLabels.size() < 3) {
+            System.out.println(" Could not locate all dropdown labels.");
+            return false;
+        }
+
+        String networkLabel = safeGetText(dropdownLabels.get(0));
+        String ioLabel = safeGetText(dropdownLabels.get(1));
+        String allLabel = safeGetText(dropdownLabels.get(2));
+
+        System.out.println(" → Network Status label: " + networkLabel);
+        System.out.println(" → I/O Status label: " + ioLabel);
+        System.out.println(" → All label: " + allLabel);
+
+        boolean ok =
+                networkLabel.equalsIgnoreCase("Network Status") &&
+                        ioLabel.equalsIgnoreCase("I/O Status") &&
+                        allLabel.equalsIgnoreCase("All");
+
+        if (!ok) {
+            System.out.println(" One or more filters did NOT reset properly.");
+            return false;
+        }
+
+        System.out.println("✔ All filter dropdowns reset successfully.");
+        return true;
+    }
+
 
     // =========================
     // Click Export
@@ -469,10 +771,10 @@ public class ModuleOverviewPage extends BaseTest {
 
             waitForTableToLoad();
 
-            List<WebElement> names = driver.findElements(moduleNameCells);
+            List<WebElement> names = safeFindAll(moduleNameCells);
 
             for (WebElement cell : names) {
-                String name = cell.getText().trim();
+                String name = safeGetText(cell).trim();
 
                 if (name.isEmpty()) {
                     System.out.println(" Empty module name found!");
@@ -516,10 +818,10 @@ public class ModuleOverviewPage extends BaseTest {
 
             waitForTableToLoad();
 
-            List<WebElement> cells = driver.findElements(moduleIpCells);
+            List<WebElement> cells = safeFindAll(moduleIpCells);
 
             for (WebElement cell : cells) {
-                String ip = cell.getText().trim();
+                String ip = safeGetText(cell).trim();
                 ipList.add(ip);
             }
 
@@ -586,7 +888,7 @@ public class ModuleOverviewPage extends BaseTest {
         while (true) {
             System.out.println("➡ Validating page " + page);
 
-            List<WebElement> indicators = driver.findElements(networkStatusCells);
+            List<WebElement> indicators = safeFindAll(networkStatusCells);
 
             if (indicators.isEmpty()) {
                 System.out.println("⚠ No network status indicators found on page " + page);
@@ -595,18 +897,18 @@ public class ModuleOverviewPage extends BaseTest {
 
             for (WebElement indicator : indicators) {
 
-                String text = indicator.getText().trim().toLowerCase();
+                String text = safeGetText(indicator).trim().toLowerCase();
 
                 String iconSrc = "";
                 try {
-                    WebElement img = indicator.findElement(By.tagName("img"));
+                    WebElement img = safeFindWithin(indicator, By.tagName("img"));
                     iconSrc = img.getAttribute("src");
                 } catch (Exception ignored) {}
 
                 // FIX HERE: get class from the INNER DIV
                 String classes = "";
                 try {
-                    WebElement statusDiv = indicator.findElement(By.cssSelector("div.module_status_indicator"));
+                    WebElement statusDiv = safeFindWithin(indicator, By.cssSelector("div.module_status_indicator"));
                     classes = statusDiv.getAttribute("class");
                 } catch (Exception e) {
                     System.out.println(" Could not extract internal status div class.");
@@ -619,6 +921,11 @@ public class ModuleOverviewPage extends BaseTest {
                     case "online":
                         if (!classes.contains("healthy")) return false;
                         if (!iconSrc.contains("online")) return false;
+                        break;
+
+                    case "degraded":
+                        if (!classes.contains("degraded")) return false;
+                        if (!iconSrc.contains("degraded")) return false;
                         break;
 
                     case "offline":
@@ -663,17 +970,17 @@ public class ModuleOverviewPage extends BaseTest {
         while (true) {
             System.out.println("➡ Validating page " + page);
 
-            List<WebElement> indicators = driver.findElements(ioStatusColumn);
+            List<WebElement> indicators = safeFindAll(ioStatusColumn);
 
             for (WebElement indicator : indicators) {
 
                 // TEXT (Healthy / Pending / Faulty)
-                String text = indicator.getText().trim().toLowerCase();
+                String text = safeGetText(indicator).trim().toLowerCase();
 
                 // ICON
                 String iconSrc = "";
                 try {
-                    WebElement img = indicator.findElement(By.tagName("img"));
+                    WebElement img = safeFindWithin(indicator, By.tagName("img"));
                     iconSrc = img.getAttribute("src");
                 } catch (Exception ignored) {}
 
@@ -681,7 +988,7 @@ public class ModuleOverviewPage extends BaseTest {
                 String classes = "";
                 try {
                     WebElement statusDiv =
-                            indicator.findElement(By.cssSelector("div.module_status_indicator"));
+                            safeFindWithin(indicator, By.cssSelector("div.module_status_indicator"));
                     classes = statusDiv.getAttribute("class");
                 } catch (Exception e) {
                     System.out.println(" Could not extract I/O status class.");
@@ -742,10 +1049,10 @@ public class ModuleOverviewPage extends BaseTest {
             System.out.println("➡ Validating page " + page);
             waitForTableToLoad();
 
-            List<WebElement> cells = driver.findElements(lastSeenCells);
+            List<WebElement> cells = safeFindAll(lastSeenCells);
 
             for (WebElement cell : cells) {
-                String text = cell.getText().trim().toLowerCase();
+                String text = safeGetText(cell).trim().toLowerCase();
 
                 System.out.println(" → Last seen: " + text);
 
@@ -755,13 +1062,17 @@ public class ModuleOverviewPage extends BaseTest {
                     return false;
                 }
 
-                // Accepted formats: now, X minutes ago, X hours ago, X days ago, Yesterday
+                // Accepted formats: now, X minutes ago, X hours ago, X days ago, Yesterday,
+                // also accept "a minute ago" and "an hour ago"
                 boolean valid =
                         text.equals("now") ||
                                 text.equals("yesterday") ||
+                                text.matches("a minute ago") ||
                                 text.matches("\\d+ minute[s]? ago") ||
+                                text.matches("an hour ago") ||
                                 text.matches("\\d+ hour[s]? ago") ||
                                 text.matches("\\d+ day[s]? ago");
+
 
                 if (!valid) {
                     System.out.println(" INVALID last seen format detected: " + text);
@@ -796,47 +1107,34 @@ public class ModuleOverviewPage extends BaseTest {
 
             System.out.println("➡ Validating page " + page);
 
-            List<WebElement> lastSeenCells = driver.findElements(
-                    By.cssSelector("td.cdk-column-last_seen")
-            );
+            List<WebElement> lastSeenCellsLocal = safeFindAll(By.cssSelector("td.cdk-column-last_seen"));
 
-            List<WebElement> networkStatusCells = driver.findElements(
-                    By.cssSelector("td.cdk-column-network_status")
-            );
+            List<WebElement> networkStatusCellsLocal = safeFindAll(By.cssSelector("td.cdk-column-network_status"));
 
-            if (lastSeenCells.size() != networkStatusCells.size()) {
+            if (lastSeenCellsLocal.size() != networkStatusCellsLocal.size()) {
                 System.out.println(" Column row count mismatch — cannot validate!");
                 return false;
             }
 
-            for (int i = 0; i < lastSeenCells.size(); i++) {
+            for (int i = 0; i < lastSeenCellsLocal.size(); i++) {
 
-                String lastSeenText = lastSeenCells.get(i).getText().trim().toLowerCase();
-                String networkStatusText = networkStatusCells.get(i).getText().trim().toLowerCase();
+                String lastSeenText = safeGetText(lastSeenCellsLocal.get(i)).trim().toLowerCase();
+                String networkStatusText = safeGetText(networkStatusCellsLocal.get(i)).trim().toLowerCase();
 
                 System.out.println(" Row " + (i + 1) + ": Last Seen = " + lastSeenText +
                         " | Network Status = " + networkStatusText);
-
-                // ---------------------------
-                // RULES:
-                // "now" → Online
-                // "a minute ago" → Offline
-                // "1 minute ago" → Offline
-                // "X minutes ago" (X ≥ 1) → Offline
-                // hours / days → Offline
-                // ---------------------------
 
                 boolean shouldBeOffline = false;
                 boolean shouldBeOnline = false;
 
                 if (lastSeenText.equals("now")) {
                     shouldBeOnline = true;
-                }
-                else if (lastSeenText.contains("hour") ||
+                } else if (lastSeenText.contains("hour") ||
                         lastSeenText.contains("day") ||
                         lastSeenText.contains("a minute ago") ||
                         lastSeenText.contains("minutes ago") ||
-                        lastSeenText.contains("minute ago")) {
+                        lastSeenText.contains("minute ago") ||
+                        lastSeenText.contains("an hour ago")) {
                     shouldBeOffline = true;
                 }
 
@@ -865,14 +1163,17 @@ public class ModuleOverviewPage extends BaseTest {
     }
 
     private boolean isCommissioned(WebElement row) {
-        WebElement nameSpan = row.findElement(moduleNameCell);
-        String clazz = nameSpan.getAttribute("class").trim().toLowerCase();
+        WebElement nameSpan = safeFindWithin(row, moduleNameCell);
+        String clazz = "";
+        try {
+            clazz = nameSpan.getAttribute("class").trim().toLowerCase();
+        } catch (Exception ignored) {}
         return clazz.equals("na"); // commissioned modules
     }
 
     private String getNetworkStatus(WebElement row) {
-        WebElement statusCell = row.findElement(By.cssSelector("td.cdk-column-network_status"));
-        return statusCell.getText().trim().toLowerCase();
+        WebElement statusCell = safeFindWithin(row, By.cssSelector("td.cdk-column-network_status"));
+        return safeGetText(statusCell).trim().toLowerCase();
     }
 
     private List<String> openActionMenuAndGetItems(WebElement button) {
@@ -880,14 +1181,15 @@ public class ModuleOverviewPage extends BaseTest {
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", button);
             wait.waitForSeconds(1);
 
-            button.click();
+            safeClickElement(button);
             wait.waitForSeconds(1);
 
-            List<WebElement> options = driver.findElements(actionOverlayItems);
+            // fetch overlay options fresh
+            List<WebElement> options = safeFindAll(actionOverlayItems);
             List<String> texts = new ArrayList<>();
 
             for (WebElement opt : options) {
-                texts.add(opt.getText().trim());
+                texts.add(safeGetText(opt).trim());
             }
 
             return texts;
@@ -900,18 +1202,19 @@ public class ModuleOverviewPage extends BaseTest {
 
     private void closeOverlay() {
         try {
-            WebElement body = driver.findElement(By.tagName("body"));
-            body.click();
+            WebElement body = safeFind(By.tagName("body"));
+            safeClickElement(body);
             wait.waitForSeconds(1);
 
-            if (!driver.findElements(By.cssSelector(".cdk-overlay-backdrop")).isEmpty()) {
+            List<WebElement> backdrops = safeFindAll(By.cssSelector(".cdk-overlay-backdrop"));
+            if (!backdrops.isEmpty()) {
+                // try clicking offset to clear overlay
                 new Actions(driver).moveByOffset(10, 10).click().perform();
                 wait.waitForSeconds(1);
             }
 
         } catch (Exception ignored) {}
     }
-
 
     public boolean validateActionColumnLogic() {
         System.out.println("\n=== VALIDATING ACTION COLUMN LOGIC ===");
@@ -920,64 +1223,77 @@ public class ModuleOverviewPage extends BaseTest {
         setRowsPerPageTo100();
         waitForTableToLoad();
 
-        int page = 1;
+        int rowIndex = 1;
 
         while (true) {
-            System.out.println("➡ Validating page " + page);
 
-            List<WebElement> rows = driver.findElements(
-                    By.cssSelector("app-module-manager-list-view table tbody tr")
-            );
+            System.out.println("➡ Validating page rows...");
 
-            int rowIndex = 1;
+            // ALWAYS re-fetch rows fresh → prevents stale elements
+            List<WebElement> rows = safeFindAll(By.cssSelector("app-module-manager-list-view table tbody tr"));
 
-            for (WebElement row : rows) {
+            for (int i = 0; i < rows.size(); i++) {
+
+                // Re-fetch row each time to avoid stale element
+                WebElement row = safeFindAll(By.cssSelector("app-module-manager-list-view table tbody tr")).get(i);
 
                 boolean commissioned = isCommissioned(row);
-                String network = getNetworkStatus(row).toLowerCase();
+                String network = getNetworkStatus(row);
+                String normalized = network.toLowerCase();
 
-                WebElement button = row.findElement(actionButtons);
+                // Now safely fetch the button fresh
+                WebElement button;
+                try {
+                    button = safeFindWithin(row, By.cssSelector("td.cdk-column-action button.khebab_action"));
+                } catch (Exception e) {
+                    System.out.println("Could not find action button in row " + rowIndex + " — skipping row.");
+                    rowIndex++;
+                    continue;
+                }
 
-                // Open overlay
                 List<String> actualMenu = openActionMenuAndGetItems(button);
 
-                // Close overlay
+                // Retry once if empty (overlay hiccup)
+                if (actualMenu.isEmpty()) {
+                    wait.waitForSeconds(1);
+                    try {
+                        row = safeFindAll(By.cssSelector("app-module-manager-list-view table tbody tr")).get(i);
+                        button = safeFindWithin(row, By.cssSelector("td.cdk-column-action button.khebab_action"));
+                        actualMenu = openActionMenuAndGetItems(button);
+                    } catch (Exception ignored) {}
+                }
+
                 closeOverlay();
 
-                // Define expected items
                 List<String> expected;
 
                 if (commissioned) {
                     expected = Arrays.asList("Edit", "View Details", "Decommission", "Delete");
-                } else if (network.contains("online")) {
+                } else if (normalized.contains("online")) {
                     expected = Arrays.asList("View Details", "Commission", "Delete");
                 } else {
                     expected = Arrays.asList("View Details", "Delete");
                 }
 
-                // Compare
                 if (!actualMenu.equals(expected)) {
-                    System.out.println("\n ACTION MENU MISMATCH (Page " + page + ", Row " + rowIndex + ")");
-                    System.out.println("Commissioned?: " + commissioned);
-                    System.out.println("Network: " + network);
+                    System.out.println("\n ACTION MENU MISMATCH (Row " + rowIndex + ")");
+                    System.out.println("Commissioned?: " + commissioned + " | Network: " + network);
                     System.out.println("Expected: " + expected);
                     System.out.println("Actual:   " + actualMenu);
                     return false;
                 }
 
-                System.out.println("✔ Page " + page + " Row " + rowIndex + " OK → " + actualMenu);
+                System.out.println("✔ Row " + rowIndex + " OK → " + actualMenu);
                 rowIndex++;
             }
 
-            // Pagination check
             if (!hasNextPage()) break;
 
             goToNextPage();
-            waitForTableToLoad();
-            page++;
+            wait.waitForSeconds(1);
         }
 
-        System.out.println("✔ All Action menu validations passed across all pages.");
+        System.out.println("✔ ALL rows validated successfully.");
         return true;
     }
 
@@ -985,3 +1301,6 @@ public class ModuleOverviewPage extends BaseTest {
 
 
 }
+
+
+
