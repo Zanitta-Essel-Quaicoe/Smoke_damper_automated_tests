@@ -102,4 +102,30 @@ public class UIHelpers {
             return false;
         }
     }
+
+    public WebElement retryFind(By locator) {
+        for (int i = 0; i < 3; i++) {
+            try {
+                return driver.findElement(locator);
+            } catch (StaleElementReferenceException e) {
+                wait.waitForSeconds(1);
+            }
+        }
+        throw new RuntimeException("Could not recover element: " + locator);
+    }
+
+    public void safeClick(WebElement element) {
+        for (int i = 0; i < 3; i++) {
+            try {
+                element.click();
+                return;
+            } catch (StaleElementReferenceException e) {
+                System.out.println("Retrying click due to stale element...");
+                wait.waitForSeconds(1);
+            }
+        }
+        throw new RuntimeException("Element still stale after retries!");
+    }
+
+
 }
